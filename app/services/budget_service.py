@@ -2,8 +2,8 @@ from datetime import date
 
 from sqlmodel import Session
 
-from app.core.models import ExpenseBudget
-from app.core.models import IncomeBudget
+from app.core.db_models.budget_models import ExpenseBudget
+from app.core.db_models.budget_models import IncomeBudget
 from app.services.db_service import add_to_db
 
 

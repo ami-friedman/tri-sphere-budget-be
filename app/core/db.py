@@ -1,10 +1,7 @@
 from sqlmodel import create_engine
 
+from .db_models import *  # noqa: F403, F401
 from app.core.config import settings
-from app.core.models import ExpenseBudget  # noqa: F401
-from app.core.models import ExpenseCategory  # noqa: F401
-from app.core.models import ExpenseCategoryGroup  # noqa: F401
-from app.core.models import ExpenseTransaction  # noqa: F401
 
 
 engine = create_engine(settings.SQLALCHEMY_DATABASE_URI)

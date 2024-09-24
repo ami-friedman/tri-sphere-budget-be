@@ -1,7 +1,7 @@
 from sqlmodel import Session
 
-from app.core.models import ExpenseTransaction
-from app.core.models import IncomeTransaction
+from app.core.db_models.category_models import ExpenseTransaction
+from app.core.db_models.category_models import IncomeTransaction
 from app.logger import logger
 from app.services.db_service import add_to_db
 

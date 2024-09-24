@@ -1,7 +1,7 @@
 from sqlmodel import Session
 
-from app.core.models import ExpenseBudget
-from app.core.models import IncomeBudget
+from app.core.db_models.budget_models import ExpenseBudget
+from app.core.db_models.budget_models import IncomeBudget
 from app.services import transaction_service
 
 
