@@ -13,26 +13,26 @@ from app.logger import logger
 from app.services.db_service import add_to_db
 
 
-def create_expense_category_group(*, session: Session, new_category: ExpCatGroupCreate) -> ExpCatGroup:
+def create_expense_category_group(*, session: Session, new_category: ExpCatGroupCreate) -> ExpCatGroupPub:
     db_category_group = ExpCatGroup.model_validate(new_category)
     logger.info(f'Creating expense category group {new_category=}')
     return add_to_db(session, db_category_group)
 
 
-def update_expense_category_group(*, session: Session, update: ExpCatGroupPub) -> ExpCatGroup:
+def update_expense_category_group(*, session: Session, update: ExpCatGroupPub) -> ExpCatGroupPub:
     logger.info(f'Updating expense category group: to {update=}')
     category_group = session.exec(select(ExpCatGroup).where(ExpCatGroup.id == update.id)).first()
     category_group.name = update.name
     return add_to_db(session, category_group)
 
 
-def create_expense_category(*, session: Session, new_category: ExpCatCreate) -> ExpCat:
+def create_expense_category(*, session: Session, new_category: ExpCatCreate) -> ExpCatPub:
     db_category = ExpCat.model_validate(new_category)
     logger.info(f'Creating expense category {db_category=}')
     return add_to_db(session, db_category)
 
 
-def update_expense_category(*, session: Session, update: ExpCatPub) -> ExpCat:
+def update_expense_category(*, session: Session, update: ExpCatPub) -> ExpCatPub:
     logger.info(f'Updating expense category to {update=}')
     category = session.exec(select(ExpCat).where(ExpCat.id == update.id)).first()
     category.name = update.name
