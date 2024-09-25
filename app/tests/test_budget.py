@@ -2,6 +2,8 @@ from datetime import datetime
 
 from sqlmodel import Session
 
+from app.core.db_models.category_models import ExpCatCreate
+from app.core.db_models.category_models import ExpCatGroupCreate
 from app.services import budget_service
 from app.services import category_service
 
@@ -11,8 +13,10 @@ class TestBudget:
         category_group_name: str = 'cash'
         category_name: str = 'cleaner'
         budget_amount: int = 1000
-        category_group = category_service.create_expense_category_group(session=db, name=category_group_name)
-        category = category_service.create_expense_category(session=db, name=category_name)
+        category_group = category_service.create_expense_category_group(
+            session=db, new_category=ExpCatGroupCreate(name=category_group_name)
+        )
+        category = category_service.create_expense_category(session=db, new_category=ExpCatCreate(name=category_name))
         new_budget_entry = budget_service.create_expense_budget_entry(
             session=db, month=datetime.today(), group_id=category_group.id, category_id=category.id, amount=budget_amount
         )
