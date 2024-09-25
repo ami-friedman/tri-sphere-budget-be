@@ -4,49 +4,49 @@ from sqlmodel import Field
 from sqlmodel import SQLModel
 
 
-class ExpenseCategoryGroupBase(SQLModel):
+class ExpCatGroupBase(SQLModel):
     name: str = Field(default=None)
 
 
-class ExpenseCategoryGroupCreate(ExpenseCategoryGroupBase):
+class ExpCatGroupCreate(ExpCatGroupBase):
     pass
 
 
-class ExpenseCategoryGroup(ExpenseCategoryGroupBase, table=True):
+class ExpCatGroup(ExpCatGroupBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
 
-class ExpenseCategoryGroupPublic(ExpenseCategoryGroupBase):
+class ExpCatGroupPub(ExpCatGroupBase):
     id: int = Field(default=None)
 
 
-class ExpenseCategoryBase(SQLModel):
+class ExpCatBase(SQLModel):
     name: str = Field(default=None)
 
 
-class ExpenseCategoryCreate(ExpenseCategoryBase):
+class ExpCatCreate(ExpCatBase):
     pass
 
 
-class ExpenseCategory(ExpenseCategoryBase, table=True):
+class ExpCat(ExpCatBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
-class ExpenseCategoryPublic(ExpenseCategoryBase):
+class ExpCatPub(ExpCatBase):
     id: int = Field(default=None)
 
 
-class IncomeCategoryBase(SQLModel):
+class IncCatBase(SQLModel):
     name: str = Field(default=None)
 
 
-class IncomeCategoryCreate(IncomeCategoryBase):
+class IncCatCreate(IncCatBase):
     pass
 
 
-class IncomeCategory(IncomeCategoryBase, table=True):
+class IncCat(IncCatBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
-class IncomeCategoryPublic(IncomeCategoryBase):
+class IncCatPub(IncCatBase):
     id: int = Field(default=None)

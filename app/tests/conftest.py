@@ -6,13 +6,13 @@ from sqlmodel import Session
 
 from app.core.db import engine
 from app.core.db import init_db
-from app.core.db_models.budget_models import ExpenseBudget
-from app.core.db_models.budget_models import IncomeBudget
-from app.core.db_models.category_models import ExpenseCategory
-from app.core.db_models.category_models import ExpenseCategoryCreate
-from app.core.db_models.category_models import ExpenseCategoryGroup
-from app.core.db_models.category_models import ExpenseCategoryGroupCreate
-from app.core.db_models.category_models import IncomeCategory
+from app.core.db_models.budget_models import ExpBudget
+from app.core.db_models.budget_models import IncBudget
+from app.core.db_models.category_models import ExpCat
+from app.core.db_models.category_models import ExpCatCreate
+from app.core.db_models.category_models import ExpCatGroup
+from app.core.db_models.category_models import ExpCatGroupCreate
+from app.core.db_models.category_models import IncCat
 from app.services import budget_service
 from app.services import category_service
 from app.tests.utils import faker
@@ -26,19 +26,19 @@ def db() -> Generator[Session, None, None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def expense_category(db: Session) -> ExpenseCategory:
-    return category_service.create_expense_category(session=db, new_category=ExpenseCategoryCreate(name=faker.random_expense_category()))
+def expense_category(db: Session) -> ExpCat:
+    return category_service.create_expense_category(session=db, new_category=ExpCatCreate(name=faker.random_expense_category()))
 
 
 @pytest.fixture(scope="session", autouse=True)
-def expense_category_group(db: Session) -> ExpenseCategoryGroup:
+def expense_category_group(db: Session) -> ExpCatGroup:
     return category_service.create_expense_category_group(
-        session=db, new_category=ExpenseCategoryGroupCreate(name=faker.random_expense_category_group())
+        session=db, new_category=ExpCatGroupCreate(name=faker.random_expense_category_group())
     )
 
 
 @pytest.fixture(scope="session", autouse=True)
-def expense_budget_item(db: Session, expense_category: ExpenseCategory, expense_category_group: ExpenseCategoryGroup) -> ExpenseBudget:
+def expense_budget_item(db: Session, expense_category: ExpCat, expense_category_group: ExpCatGroup) -> ExpBudget:
     return budget_service.create_expense_budget_entry(
         session=db,
         month=datetime.today(),
@@ -49,12 +49,12 @@ def expense_budget_item(db: Session, expense_category: ExpenseCategory, expense_
 
 
 @pytest.fixture(scope="session", autouse=True)
-def income_category(db: Session) -> IncomeCategory:
+def income_category(db: Session) -> IncCat:
     return category_service.create_income_category(session=db, name=faker.random_income_category())
 
 
 @pytest.fixture(scope="session", autouse=True)
-def income_budget_item(db: Session, income_category: IncomeCategory) -> IncomeBudget:
+def income_budget_item(db: Session, income_category: IncCat) -> IncBudget:
     return budget_service.create_income_budget_entry(
         session=db,
         month=datetime.today(),
