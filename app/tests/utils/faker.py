@@ -2,7 +2,17 @@ import random
 
 from faker import Faker
 
-expense_categories = ['Landline Phone', 'Toras Moshe', 'Therapy', 'Cell Phone', 'Internet', 'Kupat Cholim', 'Family Help', 'Electric Bill']
+expense_categories = [
+    'Landline Phone',
+    'Toras Moshe',
+    'Therapy',
+    'Cell Phone',
+    'Internet',
+    'Kupat Cholim',
+    'Family Help',
+    'Electric Bill',
+    'Yeshiva',
+]
 
 expense_category_groups = ['Cash', 'Monthly', 'Savings']
 

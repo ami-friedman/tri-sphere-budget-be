@@ -29,7 +29,8 @@ def update_expense_category_group(*, session: Session, update: ExpCatGroupPub) -
 def create_expense_category(*, session: Session, new_category: ExpCatCreate) -> ExpCatPub:
     db_category = ExpCat.model_validate(new_category)
     logger.info(f'Creating expense category {db_category=}')
-    return add_to_db(session, db_category)
+    created_category = ExpCatPub.model_validate(add_to_db(session, db_category))
+    return created_category
 
 
 def update_expense_category(*, session: Session, update: ExpCatPub) -> ExpCatPub:

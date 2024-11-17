@@ -22,6 +22,14 @@ class ExpBudget(ExpBudgetBase, table=True):
 
 class ExpBudgetPub(ExpBudgetBase):
     id: int = Field(default=None)
+    name: str = Field(default=None)
+    category_group: str = Field(default=None)
+
+
+class MonthlyBudgetRes(SQLModel):
+    total: float = Field(default=0)
+    category_group_id: int = Field(default=None)
+    breakdown: list[ExpBudgetPub] = Field(default=[])
 
 
 class IncBudgetBase(SQLModel):

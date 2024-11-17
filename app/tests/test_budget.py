@@ -2,6 +2,8 @@ from datetime import datetime
 
 from sqlmodel import Session
 
+from app.core.db_models.budget_models import ExpBudget
+from app.core.db_models.budget_models import MonthlyBudgetRes
 from app.core.db_models.category_models import ExpCatCreate
 from app.core.db_models.category_models import ExpCatGroupCreate
 from app.services import budget_service
@@ -33,3 +35,9 @@ class TestBudget:
         )
         assert new_budget_entry.category_id == category.id
         assert new_budget_entry.amount == budget_amount
+
+    def test_get_budget_for_month(self, db: Session, monthly_budget: list[ExpBudget]):
+        group_id_to_get = monthly_budget[0].category_group_id
+        expected_total_for_month = sum((m.amount for m in monthly_budget if m.category_group_id == group_id_to_get))
+        budget_for_month: MonthlyBudgetRes = budget_service.get_budget_for_month(db, monthly_budget[0].month, group_id_to_get)
+        assert budget_for_month.total == expected_total_for_month

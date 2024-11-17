@@ -1,3 +1,4 @@
+import random
 from datetime import datetime
 from typing import Generator
 
@@ -16,6 +17,8 @@ from app.core.db_models.category_models import IncCat
 from app.services import budget_service
 from app.services import category_service
 from app.tests.utils import faker
+from app.tests.utils.faker import expense_categories
+from app.tests.utils.faker import expense_category_groups
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,6 +49,25 @@ def expense_budget_item(db: Session, expense_category: ExpCat, expense_category_
         group_id=expense_category_group.id,
         amount=faker.random_expense_amount(),
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def monthly_budget(db: Session) -> list[ExpBudget]:
+    groups = [
+        category_service.create_expense_category_group(session=db, new_category=ExpCatGroupCreate(name=expense_category_groups[0])),
+        category_service.create_expense_category_group(session=db, new_category=ExpCatGroupCreate(name=expense_category_groups[1])),
+        category_service.create_expense_category_group(session=db, new_category=ExpCatGroupCreate(name=expense_category_groups[2])),
+    ]
+    monthly_b = []
+    for i in range(len(expense_categories)):
+        category = category_service.create_expense_category(session=db, new_category=ExpCatCreate(name=expense_categories[i]))
+        current_group = random.choice(groups)
+        monthly_b.append(
+            budget_service.create_expense_budget_entry(
+                session=db, month=datetime.today(), category_id=category.id, group_id=current_group.id, amount=faker.random_expense_amount()
+            )
+        )
+    return monthly_b
 
 
 @pytest.fixture(scope="session", autouse=True)
