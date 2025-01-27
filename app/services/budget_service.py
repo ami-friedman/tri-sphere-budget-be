@@ -49,7 +49,7 @@ def get_budget_for_month(session: Session, month: date, category_group_id: int) 
     return MonthlyBudgetRes(breakdown=breakdown, total=total, category_group_id=category_group_id)
 
 
-def get_total_budget_for_month(session: Session, month: date, category_group_id: int) -> list[ExpBudgetPub]:
+def get_total_budget_for_month(session: Session, month: date, category_group_id: int) -> int:
     statement = (
         select(func.sum(ExpBudget.amount).label('total_amount'))
         .where(ExpBudget.month == month, ExpBudget.category_group_id == category_group_id)
@@ -57,4 +57,4 @@ def get_total_budget_for_month(session: Session, month: date, category_group_id:
     )
     results = session.exec(statement)
 
-    return results.first()
+    return results.first() or 0
