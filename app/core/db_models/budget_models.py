@@ -1,8 +1,14 @@
 from datetime import date
 from typing import Optional
 
+from pydantic import BaseModel
 from sqlmodel import Field
 from sqlmodel import SQLModel
+
+
+class GetMonthBudgetReq(BaseModel):
+    month: date
+    category_group_id: int
 
 
 class ExpBudgetBase(SQLModel):
