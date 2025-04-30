@@ -13,8 +13,8 @@ class GetMonthBudgetReq(BaseModel):
 
 class ExpBudgetBase(SQLModel):
     month: date = Field(default=None, nullable=False)
-    category_id: int = Field(default=None, nullable=False, foreign_key='expcat.id')
-    category_group_id: int = Field(default=None, nullable=False, foreign_key='expcatgroup.id')
+    category_id: int = Field(default=None, nullable=False, foreign_key='expense_category.id')
+    category_group_id: int = Field(default=None, nullable=False, foreign_key='expense_category_group.id')
     amount: float = Field(default=None, nullable=False)
 
 
@@ -23,6 +23,7 @@ class ExpBudgetCreate(ExpBudgetBase):
 
 
 class ExpBudget(ExpBudgetBase, table=True):
+    __tablename__ = "expense_budget"
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
@@ -40,7 +41,7 @@ class MonthlyBudgetRes(SQLModel):
 
 class IncBudgetBase(SQLModel):
     month: date = Field(default=None, nullable=False)
-    category_id: int = Field(default=None, nullable=False, foreign_key='inccat.id', ondelete="CASCADE")
+    category_id: int = Field(default=None, nullable=False, foreign_key='income_category.id', ondelete="CASCADE")
     amount: float = Field(default=None, nullable=False)
 
 
@@ -49,6 +50,7 @@ class IncBudgetCreate(IncBudgetBase):
 
 
 class IncBudget(IncBudgetBase, table=True):
+    __tablename__ = "income_budget"
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
