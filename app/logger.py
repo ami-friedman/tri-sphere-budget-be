@@ -46,4 +46,4 @@ class Logger:
         streamed_logger.addHandler(StreamHandler(my_logger=self))
 
 
-logger = Logger().log
+log = Logger().log

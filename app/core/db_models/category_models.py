@@ -13,6 +13,7 @@ class ExpCatGroupCreate(ExpCatGroupBase):
 
 
 class ExpCatGroup(ExpCatGroupBase, table=True):
+    __tablename__ = "expense_category_group"
     id: int | None = Field(default=None, primary_key=True)
 
 
@@ -29,6 +30,7 @@ class ExpCatCreate(ExpCatBase):
 
 
 class ExpCat(ExpCatBase, table=True):
+    __tablename__ = "expense_category"
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
@@ -45,6 +47,7 @@ class IncCatCreate(IncCatBase):
 
 
 class IncCat(IncCatBase, table=True):
+    __tablename__ = "income_category"
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
