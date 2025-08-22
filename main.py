@@ -26,6 +26,7 @@ from models import (
     Transaction,
     TransactionCreate,
     TransactionPublic,
+    TransactionUpdate,
 )
 
 # Load environment variables
@@ -286,6 +287,49 @@ def create_transaction(transaction_create: TransactionCreate, user: User = Depen
     session.commit()
     session.refresh(db_transaction)
     return db_transaction
+
+
+@app.put("/transactions/{transaction_id}", response_model=TransactionPublic)
+def update_transaction(transaction_id: UUID, transaction_update: TransactionUpdate, user: User = Depends(get_current_user),
+                       session: Session = Depends(get_session)):
+    db_transaction = session.exec(select(Transaction).where(Transaction.id == transaction_id, Transaction.user_id == user.id)).first()
+    if not db_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found or does not belong to the user."
+        )
+
+    # Validate category exists and belongs to the user if provided
+    if transaction_update.category_id:
+        category = session.exec(select(Category).where(Category.id == transaction_update.category_id, Category.user_id == user.id)).first()
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Category not found or does not belong to the user"
+            )
+
+    # Apply updates
+    for key, value in transaction_update.model_dump(exclude_unset=True).items():
+        setattr(db_transaction, key, value)
+
+    session.add(db_transaction)
+    session.commit()
+    session.refresh(db_transaction)
+    return db_transaction
+
+
+@app.delete("/transactions/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transaction(transaction_id: UUID, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    db_transaction = session.exec(select(Transaction).where(Transaction.id == transaction_id, Transaction.user_id == user.id)).first()
+    if not db_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found or does not belong to the user."
+        )
+
+    session.delete(db_transaction)
+    session.commit()
+    return
 
 
 @app.get("/transactions", response_model=List[TransactionPublic])

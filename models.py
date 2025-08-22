@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from typing import Optional
+from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, create_engine
 from sqlalchemy import Column, ForeignKey, text
 from sqlalchemy.dialects.mysql import BINARY
@@ -45,9 +45,9 @@ class User(UserBase, table=True):
         sa_column_kwargs={"onupdate": "NOW()", "server_default": text("CURRENT_TIMESTAMP")}
     )
 
-    accounts: list["Account"] = Relationship(back_populates="user")
-    categories: list["Category"] = Relationship(back_populates="user")
-    transactions: list["Transaction"] = Relationship(back_populates="user")
+    accounts: List["Account"] = Relationship(back_populates="user")
+    categories: List["Category"] = Relationship(back_populates="user")
+    transactions: List["Transaction"] = Relationship(back_populates="user")
 
 class UserCreate(UserBase):
     password: str
@@ -77,7 +77,7 @@ class Account(SQLModel, table=True):
     )
 
     user: User = Relationship(back_populates="accounts")
-    transactions: list["Transaction"] = Relationship(back_populates="account")
+    transactions: List["Transaction"] = Relationship(back_populates="account")
 
 class Category(SQLModel, table=True):
     __tablename__ = "categories"
@@ -95,7 +95,7 @@ class Category(SQLModel, table=True):
     )
 
     user: User = Relationship(back_populates="categories")
-    transactions: list["Transaction"] = Relationship(back_populates="category")
+    transactions: List["Transaction"] = Relationship(back_populates="category")
 
 # Pydantic schema for Category creation
 class CategoryCreate(SQLModel):
@@ -141,6 +141,13 @@ class TransactionCreate(SQLModel):
     amount: float
     description: Optional[str]
     transaction_date: date
+
+# Pydantic schema for Transaction update - all fields are optional
+class TransactionUpdate(SQLModel):
+    category_id: Optional[UUID] = None
+    amount: Optional[float] = None
+    description: Optional[str] = None
+    transaction_date: Optional[date] = None
 
 # Pydantic schema for returning Transaction data
 class TransactionPublic(TransactionCreate):
