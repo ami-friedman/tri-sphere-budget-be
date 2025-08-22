@@ -153,3 +153,15 @@ class TransactionUpdate(SQLModel):
 class TransactionPublic(TransactionCreate):
     id: UUID
     created_at: datetime
+
+# Pydantic schema for Transfer creation
+class TransferCreate(SQLModel):
+    category_id: UUID
+    amount: float
+    description: Optional[str] = None
+    transaction_date: date
+
+# Pydantic schema for returning Transfer data
+class TransferPublic(TransferCreate):
+    id: UUID
+    created_at: datetime

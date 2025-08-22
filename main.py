@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List, Dict, Any, Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, create_engine, SQLModel, select
@@ -27,6 +27,8 @@ from models import (
     TransactionCreate,
     TransactionPublic,
     TransactionUpdate,
+    TransferCreate,
+    TransferPublic
 )
 
 # Load environment variables
@@ -333,23 +335,150 @@ def delete_transaction(transaction_id: UUID, user: User = Depends(get_current_us
 
 
 @app.get("/transactions", response_model=List[TransactionPublic])
-def get_transactions(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    transactions = session.exec(select(Transaction).where(Transaction.user_id == user.id)).all()
+def get_transactions(
+        user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+        year: Optional[int] = None,
+        month: Optional[int] = None
+):
+    current_year = year if year else date.today().year
+    current_month = month if month else date.today().month
+
+    start_date = date(current_year, current_month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    transactions = session.exec(
+        select(Transaction).where(
+            Transaction.user_id == user.id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date
+        )
+    ).all()
     return transactions
 
 
+@app.post("/transfers", response_model=TransferPublic, status_code=status.HTTP_201_CREATED)
+def create_transfer(transfer_create: TransferCreate, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    # Validate the transfer category is of type 'Savings' and belongs to the user
+    try:
+        category_id = UUID(str(transfer_create.category_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid category ID format"
+        )
+
+    category = session.exec(select(Category).where(Category.id == category_id, Category.user_id == user.id)).first()
+    if not category or category.type != 'Savings':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid category: transfers must be to a 'Savings' category."
+        )
+
+    db_transaction = Transaction(
+        user_id=user.id,
+        category_id=category_id,
+        amount=-transfer_create.amount,  # Transfers out of main account are negative
+        description=transfer_create.description,
+        transaction_date=transfer_create.transaction_date,
+    )
+    session.add(db_transaction)
+    session.commit()
+    session.refresh(db_transaction)
+    return db_transaction
+
+
+@app.get("/transfers", response_model=List[TransferPublic])
+def get_transfers(
+        user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+        year: Optional[int] = None,
+        month: Optional[int] = None
+):
+    current_year = year if year else date.today().year
+    current_month = month if month else date.today().month
+
+    start_date = date(current_year, current_month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    transfer_category_type = 'Savings'
+
+    transactions = session.exec(
+        select(Transaction)
+        .join(Category, Transaction.category_id == Category.id)
+        .where(
+            Transaction.user_id == user.id,
+            Category.type == transfer_category_type,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date
+        )
+    ).all()
+    return transactions
+
+
+@app.put("/transfers/{transfer_id}", response_model=TransferPublic)
+def update_transfer(transfer_id: UUID, transfer_update: TransactionUpdate, user: User = Depends(get_current_user),
+                    session: Session = Depends(get_session)):
+    db_transaction = session.exec(select(Transaction).where(Transaction.id == transfer_id, Transaction.user_id == user.id)).first()
+    if not db_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found or does not belong to the user."
+        )
+
+    # Validate the transfer category is of type 'Savings' and belongs to the user
+    if transfer_update.category_id:
+        category = session.exec(select(Category).where(Category.id == transfer_update.category_id, Category.user_id == user.id)).first()
+        if not category or category.type != 'Savings':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid category: transfers must be to a 'Savings' category."
+            )
+
+    # Apply updates
+    for key, value in transfer_update.model_dump(exclude_unset=True).items():
+        setattr(db_transaction, key, value)
+
+    session.add(db_transaction)
+    session.commit()
+    session.refresh(db_transaction)
+    return db_transaction
+
+
+@app.delete("/transfers/{transfer_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transfer(transfer_id: UUID, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    db_transaction = session.exec(select(Transaction).where(Transaction.id == transfer_id, Transaction.user_id == user.id)).first()
+    if not db_transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found or does not belong to the user."
+        )
+
+    session.delete(db_transaction)
+    session.commit()
+    return
+
+
 @app.get("/dashboard", response_model=Dict[str, Any])
-def get_dashboard_summary(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    current_month_start = datetime(date.today().year, date.today().month, 1).date()
-    next_month_start = (current_month_start + timedelta(days=32)).replace(day=1)
+def get_dashboard_summary(
+        user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+        year: Optional[int] = None,
+        month: Optional[int] = None
+):
+    current_year = year if year else date.today().year
+    current_month = month if month else date.today().month
+
+    start_date = date(current_year, current_month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
 
     # Fetch all transactions and categories for the user
     transactions = session.exec(
         select(Transaction)
         .where(
             Transaction.user_id == user.id,
-            Transaction.transaction_date >= current_month_start,
-            Transaction.transaction_date < next_month_start
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date
         )
     ).all()
     categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
