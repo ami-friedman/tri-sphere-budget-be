@@ -103,6 +103,12 @@ class CategoryCreate(SQLModel):
     type: str
     budgeted_amount: float = 0.00
 
+# Pydantic schema for Category update - all fields are optional
+class CategoryUpdate(SQLModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    budgeted_amount: Optional[float] = None
+
 # Pydantic schema for returning Category data
 class CategoryPublic(CategoryCreate):
     id: UUID

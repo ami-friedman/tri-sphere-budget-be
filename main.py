@@ -22,6 +22,7 @@ from models import (
     Category,
     CategoryCreate,
     CategoryPublic,
+    CategoryUpdate,
     Transaction,
     TransactionCreate,
     TransactionPublic,
@@ -229,6 +230,26 @@ def create_category(category_create: CategoryCreate, user: User = Depends(get_cu
     return db_category
 
 
+@app.put("/categories/{category_id}", response_model=CategoryPublic)
+def update_category(category_id: UUID, category_update: CategoryUpdate, user: User = Depends(get_current_user),
+                    session: Session = Depends(get_session)):
+    db_category = session.exec(select(Category).where(Category.id == category_id, Category.user_id == user.id)).first()
+    if not db_category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found or does not belong to the user."
+        )
+
+    # Apply updates
+    for key, value in category_update.model_dump(exclude_unset=True).items():
+        setattr(db_category, key, value)
+
+    session.add(db_category)
+    session.commit()
+    session.refresh(db_category)
+    return db_category
+
+
 @app.get("/categories", response_model=List[CategoryPublic])
 def get_categories(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
@@ -272,9 +293,6 @@ def get_transactions(user: User = Depends(get_current_user), session: Session = 
     transactions = session.exec(select(Transaction).where(Transaction.user_id == user.id)).all()
     return transactions
 
-
-# Protected API Endpoints
-# ... (other endpoints)
 
 @app.get("/dashboard", response_model=Dict[str, Any])
 def get_dashboard_summary(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
