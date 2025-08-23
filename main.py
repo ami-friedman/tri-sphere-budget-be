@@ -28,7 +28,8 @@ from models import (
     TransactionPublic,
     TransactionUpdate,
     TransferCreate,
-    TransferPublic
+    TransferPublic,
+    CategoryType
 )
 
 # Load environment variables
@@ -459,14 +460,6 @@ def delete_transfer(transfer_id: UUID, user: User = Depends(get_current_user), s
     return
 
 
-from models import (
-    # ... other imports
-    CategoryType  # Make sure CategoryType is imported from models
-)
-
-
-# ... other endpoints ...
-
 @app.get("/dashboard", response_model=Dict[str, Any])
 def get_dashboard_summary(
         user: User = Depends(get_current_user),
@@ -553,3 +546,27 @@ def get_dashboard_summary(
         "monthly_expenses": expense_breakdown,  # Renamed for clarity, but key is the same for FE
         "savings_balances": savings_balances
     }
+
+
+@app.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(category_id: UUID, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    # First, find the category to ensure it exists and belongs to the user
+    db_category = session.exec(select(Category).where(Category.id == category_id, Category.user_id == user.id)).first()
+    if not db_category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found."
+        )
+
+    # Business Logic: Check if any transactions are using this category
+    transaction_check = session.exec(select(Transaction).where(Transaction.category_id == category_id)).first()
+    if transaction_check:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete category. It is currently in use by one or more transactions."
+        )
+
+    # If no transactions are using it, proceed with deletion
+    session.delete(db_category)
+    session.commit()
+    return
