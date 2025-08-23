@@ -459,6 +459,14 @@ def delete_transfer(transfer_id: UUID, user: User = Depends(get_current_user), s
     return
 
 
+from models import (
+    # ... other imports
+    CategoryType  # Make sure CategoryType is imported from models
+)
+
+
+# ... other endpoints ...
+
 @app.get("/dashboard", response_model=Dict[str, Any])
 def get_dashboard_summary(
         user: User = Depends(get_current_user),
@@ -481,34 +489,46 @@ def get_dashboard_summary(
             Transaction.transaction_date < end_date
         )
     ).all()
-    categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
+    all_user_categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
 
-    category_map = {c.id: c for c in categories}
+    category_map = {c.id: c for c in all_user_categories}
 
     total_income = 0.0
     total_expenses = 0.0
-
-    # Calculate actual spending per category
     actual_spending_by_category = {}
+    savings_movements = {}
 
     for transaction in transactions:
         category = category_map.get(transaction.category_id)
-        if not category or category.type == 'Transfer':
+        if not category or category.type == CategoryType.TRANSFER:
             continue
 
-        if category.type == 'Income':
+        if category.type == CategoryType.INCOME:
             total_income += transaction.amount
         else:
+            # This correctly includes Cash, Monthly, and Savings in total expenses
             total_expenses += transaction.amount
-            actual_spending_by_category.setdefault(category.id, 0.0)
-            actual_spending_by_category[category.id] += transaction.amount
 
-    # Build the monthly expenses list (Budget vs Actual)
-    monthly_expenses = []
-    monthly_categories = [c for c in categories if c.type == 'Monthly']
-    for category in monthly_categories:
+            # Populate actual spending for expense categories
+            if category.type in [CategoryType.CASH, CategoryType.MONTHLY]:
+                actual_spending_by_category.setdefault(category.id, 0.0)
+                actual_spending_by_category[category.id] += transaction.amount
+
+            # Track savings movements separately for savings balance calculation
+            if category.type == CategoryType.SAVINGS:
+                savings_movements.setdefault(category.id, 0.0)
+                savings_movements[category.id] += transaction.amount
+
+    # Build the expense breakdown table (Budget vs Actual)
+    expense_breakdown = []
+    # **THIS IS THE FIX**: Include both 'Monthly' and 'Cash' types in the table.
+    budgeted_expense_categories = [
+        c for c in all_user_categories if c.type in [CategoryType.MONTHLY, CategoryType.CASH]
+    ]
+
+    for category in budgeted_expense_categories:
         actual_spent = actual_spending_by_category.get(category.id, 0.0)
-        monthly_expenses.append({
+        expense_breakdown.append({
             "sub_category": category.name,
             "budgeted_amount": category.budgeted_amount,
             "actual_spent": actual_spent,
@@ -517,9 +537,10 @@ def get_dashboard_summary(
 
     # Build the savings balances list
     savings_balances = []
-    savings_categories = [c for c in categories if c.type == 'Savings']
+    savings_categories = [c for c in all_user_categories if c.type == CategoryType.SAVINGS]
     for category in savings_categories:
-        balance = actual_spending_by_category.get(category.id, 0.0)
+        # NOTE: Savings balance is just the sum of transactions to that category.
+        balance = savings_movements.get(category.id, 0.0)
         savings_balances.append({
             "sub_category": category.name,
             "current_balance": balance
@@ -529,6 +550,6 @@ def get_dashboard_summary(
         "total_income": total_income,
         "total_expenses": total_expenses,
         "net_balance": total_income - total_expenses,
-        "monthly_expenses": monthly_expenses,
+        "monthly_expenses": expense_breakdown,  # Renamed for clarity, but key is the same for FE
         "savings_balances": savings_balances
     }

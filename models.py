@@ -1,7 +1,8 @@
+import enum
 from uuid import UUID, uuid4
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship, create_engine
-from sqlalchemy import Column, ForeignKey, text
+from sqlalchemy import Column, ForeignKey, text, Enum as SAEnum
 from sqlalchemy.dialects.mysql import BINARY
 from sqlalchemy.types import TypeDecorator, CHAR
 from datetime import datetime, date
@@ -9,6 +10,8 @@ from datetime import datetime, date
 # Custom UUID Type for MySQL
 class UUIDBinary(TypeDecorator):
     impl = CHAR(32)
+    # **THIS IS THE FIX**: Added cache_ok = True for performance.
+    cache_ok = True
 
     def load_dialect_impl(self, dialect):
         return dialect.type_descriptor(BINARY(16))
@@ -22,6 +25,14 @@ class UUIDBinary(TypeDecorator):
         if value is None:
             return value
         return UUID(bytes=value)
+
+# Define the Enum for category types
+class CategoryType(str, enum.Enum):
+    CASH = "Cash"
+    MONTHLY = "Monthly"
+    SAVINGS = "Savings"
+    TRANSFER = "Transfer"
+    INCOME = "Income"
 
 
 class UserBase(SQLModel):
@@ -42,7 +53,7 @@ class User(UserBase, table=True):
     )
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": "NOW()", "server_default": text("CURRENT_TIMESTAMP")}
+        sa_column_kwargs={"onupdate": text("CURRENT_TIMESTAMP"), "server_default": text("CURRENT_TIMESTAMP")}
     )
 
     accounts: List["Account"] = Relationship(back_populates="user")
@@ -79,16 +90,18 @@ class Account(SQLModel, table=True):
     user: User = Relationship(back_populates="accounts")
     transactions: List["Transaction"] = Relationship(back_populates="account")
 
-class Category(SQLModel, table=True):
+class CategoryBase(SQLModel):
+    name: str
+    type: CategoryType = Field(sa_column=Column(SAEnum(CategoryType, values_callable=lambda obj: [e.value for e in obj])))
+    budgeted_amount: float = Field(default=0.00)
+
+class Category(CategoryBase, table=True):
     __tablename__ = "categories"
     id: UUID = Field(
         default_factory=uuid4,
         sa_column=Column(UUIDBinary, primary_key=True, default=uuid4)
     )
     user_id: UUID = Field(sa_column=Column(UUIDBinary, ForeignKey("users.id")))
-    name: str
-    type: str
-    budgeted_amount: float = Field(default=0.00)
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")}
@@ -97,20 +110,15 @@ class Category(SQLModel, table=True):
     user: User = Relationship(back_populates="categories")
     transactions: List["Transaction"] = Relationship(back_populates="category")
 
-# Pydantic schema for Category creation
-class CategoryCreate(SQLModel):
-    name: str
-    type: str
-    budgeted_amount: float = 0.00
+class CategoryCreate(CategoryBase):
+    pass
 
-# Pydantic schema for Category update - all fields are optional
 class CategoryUpdate(SQLModel):
     name: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[CategoryType] = None
     budgeted_amount: Optional[float] = None
 
-# Pydantic schema for returning Category data
-class CategoryPublic(CategoryCreate):
+class CategoryPublic(CategoryBase):
     id: UUID
     created_at: datetime
 
@@ -124,7 +132,7 @@ class Transaction(SQLModel, table=True):
     account_id: Optional[UUID] = Field(sa_column=Column(UUIDBinary, ForeignKey("accounts.id"), nullable=True))
     category_id: UUID = Field(sa_column=Column(UUIDBinary, ForeignKey("categories.id")))
     amount: float
-    description: Optional[str]
+    description: Optional[str] = None
     transaction_date: date
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -135,33 +143,28 @@ class Transaction(SQLModel, table=True):
     account: Optional[Account] = Relationship(back_populates="transactions")
     category: Category = Relationship(back_populates="transactions")
 
-# Pydantic schema for Transaction creation
 class TransactionCreate(SQLModel):
     category_id: UUID
     amount: float
-    description: Optional[str]
+    description: Optional[str] = None
     transaction_date: date
 
-# Pydantic schema for Transaction update - all fields are optional
 class TransactionUpdate(SQLModel):
     category_id: Optional[UUID] = None
     amount: Optional[float] = None
     description: Optional[str] = None
     transaction_date: Optional[date] = None
 
-# Pydantic schema for returning Transaction data
 class TransactionPublic(TransactionCreate):
     id: UUID
     created_at: datetime
 
-# Pydantic schema for Transfer creation
 class TransferCreate(SQLModel):
     category_id: UUID
     amount: float
     description: Optional[str] = None
     transaction_date: date
 
-# Pydantic schema for returning Transfer data
 class TransferPublic(TransferCreate):
     id: UUID
     created_at: datetime
