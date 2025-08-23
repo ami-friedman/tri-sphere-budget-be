@@ -30,10 +30,25 @@ CREATE TABLE `categories` (
     `id` BINARY(16) NOT NULL PRIMARY KEY,
     `user_id` BINARY(16) NOT NULL,
     `name` VARCHAR(255) NOT NULL,
-    `type` ENUM('Cash', 'Monthly', 'Savings', 'Transfer') NOT NULL,
+    `type` ENUM('Cash', 'Monthly', 'Savings', 'Transfer', 'Income') NOT NULL,
     `budgeted_amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Table for storing monthly budget overrides
+CREATE TABLE `monthly_budgets` (
+    `id` BINARY(16) NOT NULL PRIMARY KEY,
+    `user_id` BINARY(16) NOT NULL,
+    `category_id` BINARY(16) NOT NULL,
+    `year` SMALLINT NOT NULL,
+    `month` TINYINT NOT NULL,
+    `budgeted_amount` DECIMAL(10, 2) NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE CASCADE,
+    UNIQUE KEY `uniq_monthly_budget` (`user_id`, `category_id`, `year`, `month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Table for financial transactions
