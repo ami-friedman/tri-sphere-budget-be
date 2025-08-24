@@ -464,3 +464,94 @@ def fund_savings_from_budget(req: FundSavingsRequest, user: User = Depends(get_c
 
     session.commit()
     return {"message": f"Successfully created {new_transactions_created} funding transaction(s)."}
+
+
+class FundBalance(BaseModel):
+    fund_name: str
+    current_balance: float
+
+
+class SavingsSummary(BaseModel):
+    total_balance: float
+    fund_balances: List[FundBalance]
+
+
+class V2DashboardResponse(BaseModel):
+    checking_summary: Dict[str, BudgetActual]
+    savings_summary: SavingsSummary
+
+
+# ** NEW ENDPOINT **
+@app.get("/dashboard/v2", response_model=V2DashboardResponse)
+def get_full_dashboard(year: int, month: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    # --- Part 1: Checking Account Summary (similar to old summary endpoint) ---
+    checking_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.CHECKING)).first()
+    if not checking_acc:
+        raise HTTPException(status_code=404, detail="Checking account not found.")
+
+    start_date = date(year, month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    all_categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
+    monthly_overrides = session.exec(
+        select(MonthlyBudget).where(MonthlyBudget.user_id == user.id, MonthlyBudget.year == year, MonthlyBudget.month == month)).all()
+    transactions = session.exec(select(Transaction).where(Transaction.user_id == user.id, Transaction.account_id == checking_acc.id,
+                                                          Transaction.transaction_date >= start_date,
+                                                          Transaction.transaction_date < end_date)).all()
+
+    budget_map = {mb.category_id: mb.budgeted_amount for mb in monthly_overrides}
+    category_map = {c.id: c for c in all_categories}
+
+    summary = {"income": BudgetActual(), "monthly": BudgetActual(), "cash": BudgetActual(), "savings": BudgetActual()}
+    for cat in all_categories:
+        budgeted_amount = budget_map.get(cat.id, cat.budgeted_amount)
+        if cat.type == CategoryType.INCOME:
+            summary["income"].budgeted += budgeted_amount
+        elif cat.type == CategoryType.MONTHLY:
+            summary["monthly"].budgeted += budgeted_amount
+        elif cat.type == CategoryType.CASH:
+            summary["cash"].budgeted += budgeted_amount
+        elif cat.type == CategoryType.SAVINGS:
+            summary["savings"].budgeted += budgeted_amount
+
+    for tx in transactions:
+        cat = category_map.get(tx.category_id)
+        if not cat or cat.type == CategoryType.TRANSFER: continue
+        amount = abs(tx.amount)
+        if cat.type == CategoryType.INCOME:
+            summary["income"].actual += amount
+        elif cat.type == CategoryType.MONTHLY:
+            summary["monthly"].actual += amount
+        elif cat.type == CategoryType.CASH:
+            summary["cash"].actual += amount
+        elif cat.type == CategoryType.SAVINGS:
+            summary["savings"].actual += amount
+
+    total_exp_b = summary["monthly"].budgeted + summary["cash"].budgeted + summary["savings"].budgeted
+    total_exp_a = summary["monthly"].actual + summary["cash"].actual + summary["savings"].actual
+
+    checking_summary = {
+        "income": summary["income"], "monthly": summary["monthly"], "cash": summary["cash"], "savings": summary["savings"],
+        "total_expenses": BudgetActual(budgeted=total_exp_b, actual=total_exp_a),
+        "net_cash_flow": BudgetActual(budgeted=summary["income"].budgeted - total_exp_b, actual=summary["income"].actual - total_exp_a)
+    }
+
+    # --- Part 2: Savings Account Summary (from savings ledger endpoint) ---
+    savings_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.SAVINGS)).first()
+    if not savings_acc:
+        savings_summary = SavingsSummary(total_balance=0, fund_balances=[])
+    else:
+        all_savings_txs = session.exec(
+            select(Transaction).where(Transaction.user_id == user.id, Transaction.account_id == savings_acc.id)).all()
+        savings_cats = [c for c in all_categories if c.type == CategoryType.SAVINGS]
+
+        total_balance = sum(tx.amount for tx in all_savings_txs)
+
+        fund_balances = []
+        for cat in savings_cats:
+            balance = sum(tx.amount for tx in all_savings_txs if tx.category_id == cat.id)
+            fund_balances.append(FundBalance(fund_name=cat.name, current_balance=balance))
+
+        savings_summary = SavingsSummary(total_balance=total_balance, fund_balances=fund_balances)
+
+    return V2DashboardResponse(checking_summary=checking_summary, savings_summary=savings_summary)
