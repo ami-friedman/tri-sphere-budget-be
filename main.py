@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from operator import or_
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from uuid import UUID
 from datetime import datetime, timedelta, timezone, date
@@ -237,6 +238,28 @@ def get_transactions(year: int, month: int, user: User = Depends(get_current_use
     end_date = (start_date + timedelta(days=32)).replace(day=1)
     return session.exec(select(Transaction).where(Transaction.user_id == user.id, Transaction.transaction_date >= start_date,
                                                   Transaction.transaction_date < end_date)).all()
+
+
+@app.get("/transfers", response_model=List[TransactionPublic])
+def get_transfers(year: int, month: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """
+    Fetches transactions that are categorized as 'Savings' or 'Transfer'.
+    """
+    start_date = date(year, month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    statement = (
+        select(Transaction)
+        .join(Category)
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date,
+            or_(Category.type == CategoryType.SAVINGS, Category.type == CategoryType.TRANSFER)
+        )
+    )
+    return session.exec(statement).all()
+
 
 
 @app.get("/dashboard", response_model=Dict[str, Any])
