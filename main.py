@@ -377,3 +377,67 @@ def get_dashboard_summary_v2(year: int, month: int, user: User = Depends(get_cur
     summary.net_cash_flow.actual = summary.income.actual - summary.total_expenses.actual
 
     return summary
+
+
+class FundSavingsRequest(BaseModel):
+    year: int
+    month: int
+
+
+@app.post("/transactions/fund-savings", status_code=201)
+def fund_savings_from_budget(req: FundSavingsRequest, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """
+    Creates funding transactions for all savings categories that have a budget
+    but have not yet been funded for the given month.
+    """
+    year, month = req.year, req.month
+    start_date = date(year, month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    # 1. Get user's accounts
+    checking_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.CHECKING)).first()
+    savings_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.SAVINGS)).first()
+    if not checking_acc or not savings_acc:
+        raise HTTPException(status_code=404, detail="User accounts not configured correctly.")
+
+    # 2. Find all savings categories with a budget > 0
+    savings_categories = session.exec(
+        select(Category).where(
+            Category.user_id == user.id,
+            Category.type == CategoryType.SAVINGS,
+            Category.budgeted_amount > 0
+        )
+    ).all()
+    if not savings_categories:
+        return {"message": "No savings categories with a budget to fund."}
+
+    # 3. Check for existing funding transactions this month to avoid duplicates
+    existing_funding_txs = session.exec(
+        select(Transaction).where(
+            Transaction.user_id == user.id,
+            Transaction.account_id == checking_acc.id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date,
+            Transaction.category_id.in_([c.id for c in savings_categories])
+        )
+    ).all()
+    funded_category_ids = {tx.category_id for tx in existing_funding_txs}
+
+    # 4. Create transactions for unfunded categories
+    new_transactions_created = 0
+    for cat in savings_categories:
+        if cat.id not in funded_category_ids:
+            amount = cat.budgeted_amount
+
+            checking_tx = Transaction(user_id=user.id, account_id=checking_acc.id, category_id=cat.id, amount=-amount,
+                                      transaction_date=start_date, description="Budgeted Savings Funding")
+            savings_tx = Transaction(user_id=user.id, account_id=savings_acc.id, category_id=cat.id, amount=amount,
+                                     transaction_date=start_date, description=f"Funding from {checking_acc.name}")
+            session.add_all([checking_tx, savings_tx])
+            new_transactions_created += 1
+
+    if new_transactions_created == 0:
+        return {"message": "All savings categories have already been funded for this month."}
+
+    session.commit()
+    return {"message": f"Successfully created {new_transactions_created} funding transaction(s)."}
