@@ -15,11 +15,12 @@ CREATE TABLE `users` (
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Table for main financial accounts
+-- Table for main financial accounts (e.g., Checking, Savings)
 CREATE TABLE `accounts` (
     `id` BINARY(16) NOT NULL PRIMARY KEY,
     `user_id` BINARY(16) NOT NULL,
     `name` VARCHAR(255) NOT NULL,
+    `type` ENUM('Checking', 'Savings') NOT NULL,
     `initial_balance` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
@@ -55,13 +56,13 @@ CREATE TABLE `monthly_budgets` (
 CREATE TABLE `transactions` (
     `id` BINARY(16) NOT NULL PRIMARY KEY,
     `user_id` BINARY(16) NOT NULL,
-    `account_id` BINARY(16),
+    `account_id` BINARY(16) NOT NULL,
     `category_id` BINARY(16) NOT NULL,
     `amount` DECIMAL(10, 2) NOT NULL,
     `description` VARCHAR(255),
     `transaction_date` DATE NOT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-    FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
