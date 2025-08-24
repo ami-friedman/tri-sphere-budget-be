@@ -1,8 +1,9 @@
 import os
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, List, Dict, Any, Optional
+from typing import AsyncGenerator, List, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta, timezone, date
+from pydantic import BaseModel
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, status
@@ -290,5 +291,89 @@ def get_budget_summary(user: User = Depends(get_current_user), session: Session 
             summary["cash"] += cat.budgeted_amount
         elif cat.type == CategoryType.SAVINGS:
             summary["savings"] += cat.budgeted_amount
+
+    return summary
+
+
+class BudgetActual(BaseModel):
+    budgeted: float = 0.0
+    actual: float = 0.0
+
+
+class DashboardSummaryResponse(BaseModel):
+    income: BudgetActual
+    monthly: BudgetActual
+    cash: BudgetActual
+    savings: BudgetActual
+    total_expenses: BudgetActual
+    net_cash_flow: BudgetActual
+
+
+@app.get("/dashboard/summary", response_model=DashboardSummaryResponse)
+def get_dashboard_summary_v2(year: int, month: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    # 1. Get user's primary checking account
+    checking_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.CHECKING)).first()
+    if not checking_acc:
+        raise HTTPException(status_code=404, detail="Checking account not found for user.")
+
+    # 2. Fetch all necessary data for the given month
+    start_date = date(year, month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    all_categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
+    monthly_overrides = session.exec(
+        select(MonthlyBudget).where(MonthlyBudget.user_id == user.id, MonthlyBudget.year == year, MonthlyBudget.month == month)).all()
+    transactions = session.exec(select(Transaction).where(Transaction.user_id == user.id, Transaction.account_id == checking_acc.id,
+                                                          Transaction.transaction_date >= start_date,
+                                                          Transaction.transaction_date < end_date)).all()
+
+    # 3. Process data into useful lookups
+    budget_map = {mb.category_id: mb.budgeted_amount for mb in monthly_overrides}
+    category_map = {c.id: c for c in all_categories}
+
+    # 4. Calculate Budgeted and Actual totals for each category type
+    summary = DashboardSummaryResponse(
+        income=BudgetActual(),
+        monthly=BudgetActual(),
+        cash=BudgetActual(),
+        savings=BudgetActual(),
+        total_expenses=BudgetActual(),
+        net_cash_flow=BudgetActual()
+    )
+
+    # Calculate budgeted amounts
+    for cat in all_categories:
+        budgeted_amount = budget_map.get(cat.id, cat.budgeted_amount)
+        if cat.type == CategoryType.INCOME:
+            summary.income.budgeted += budgeted_amount
+        elif cat.type == CategoryType.MONTHLY:
+            summary.monthly.budgeted += budgeted_amount
+        elif cat.type == CategoryType.CASH:
+            summary.cash.budgeted += budgeted_amount
+        elif cat.type == CategoryType.SAVINGS:
+            summary.savings.budgeted += budgeted_amount
+
+    # Calculate actual amounts from transactions
+    for tx in transactions:
+        cat = category_map.get(tx.category_id)
+        if not cat or cat.type == CategoryType.TRANSFER:
+            continue
+
+        amount = abs(tx.amount)
+        if cat.type == CategoryType.INCOME:
+            summary.income.actual += amount
+        elif cat.type == CategoryType.MONTHLY:
+            summary.monthly.actual += amount
+        elif cat.type == CategoryType.CASH:
+            summary.cash.actual += amount
+        elif cat.type == CategoryType.SAVINGS:
+            summary.savings.actual += amount
+
+    # 5. Calculate final totals
+    summary.total_expenses.budgeted = summary.monthly.budgeted + summary.cash.budgeted + summary.savings.budgeted
+    summary.total_expenses.actual = summary.monthly.actual + summary.cash.actual + summary.savings.actual
+
+    summary.net_cash_flow.budgeted = summary.income.budgeted - summary.total_expenses.budgeted
+    summary.net_cash_flow.actual = summary.income.actual - summary.total_expenses.actual
 
     return summary
