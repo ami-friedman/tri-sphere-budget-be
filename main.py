@@ -264,3 +264,31 @@ def get_savings_ledger(user: User = Depends(get_current_user), session: Session 
     recent_activity = sorted(all_txs, key=lambda tx: tx.transaction_date, reverse=True)[:20]
 
     return {"total_balance": total_balance, "fund_balances": fund_balances, "recent_activity": recent_activity}
+
+
+@app.get("/budget-summary", response_model=Dict[str, float])
+def get_budget_summary(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """
+    Calculates the total budgeted amounts for each category type.
+    This is used for the summary panel on the Budget page.
+    """
+    all_categories = session.exec(select(Category).where(Category.user_id == user.id)).all()
+
+    summary = {
+        "income": 0.0,
+        "monthly": 0.0,
+        "cash": 0.0,
+        "savings": 0.0,
+    }
+
+    for cat in all_categories:
+        if cat.type == CategoryType.INCOME:
+            summary["income"] += cat.budgeted_amount
+        elif cat.type == CategoryType.MONTHLY:
+            summary["monthly"] += cat.budgeted_amount
+        elif cat.type == CategoryType.CASH:
+            summary["cash"] += cat.budgeted_amount
+        elif cat.type == CategoryType.SAVINGS:
+            summary["savings"] += cat.budgeted_amount
+
+    return summary
