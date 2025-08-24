@@ -205,10 +205,33 @@ def delete_transaction(tx_id: UUID, user: User = Depends(get_current_user), sess
 
 
 @app.get("/transactions", response_model=List[TransactionPublic])
-def get_transactions(year: int, month: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    start, end = date(year, month, 1), (date(year, month, 1) + timedelta(days=32)).replace(day=1)
-    return session.exec(select(Transaction).where(Transaction.user_id == user.id, Transaction.transaction_date >= start,
-                                                  Transaction.transaction_date < end)).all()
+def get_transactions(
+        year: int,
+        month: int,
+        account_id: UUID,
+        user: User = Depends(get_current_user),
+        session: Session = Depends(get_session)
+):
+    """
+    Fetches transactions for a SPECIFIC account for a given month and year.
+    """
+    # 1. Validate that the requested account belongs to the user
+    account = session.get(Account, account_id)
+    if not account or account.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    # 2. Fetch transactions for that specific account for the given period
+    start_date = date(year, month, 1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1)
+
+    return session.exec(
+        select(Transaction).where(
+            Transaction.user_id == user.id,
+            Transaction.account_id == account_id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date
+        )
+    ).all()
 
 
 @app.get("/dashboard", response_model=Dict[str, Any])
