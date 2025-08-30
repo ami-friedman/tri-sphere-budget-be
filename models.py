@@ -43,6 +43,7 @@ class User(UserBase, table=True):
     categories: List["Category"] = Relationship(back_populates="user")
     transactions: List["Transaction"] = Relationship(back_populates="user")
     monthly_budgets: List["MonthlyBudget"] = Relationship(back_populates="user")
+    pending_transactions: List["PendingTransaction"] = Relationship(back_populates="user")
 
 class UserCreate(UserBase):
     password: str
@@ -134,3 +135,31 @@ class TransactionUpdate(SQLModel):
 class TransactionPublic(TransactionCreate):
     id: UUID
     created_at: datetime
+
+
+class PendingTransaction(SQLModel, table=True):
+    __tablename__ = "pending_transactions"
+    id: UUID = Field(default_factory=uuid4, sa_column=Column(UUIDBinary, primary_key=True))
+    user_id: UUID = Field(sa_column=Column(UUIDBinary, ForeignKey("users.id")))
+    statement_description: str
+    transaction_date: date
+    amount: float
+    # NEW: Field to store the target account type
+    target_account_type: AccountType = Field(sa_column=Column(SAEnum(AccountType)))
+    created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")})
+
+    user: User = Relationship(back_populates="pending_transactions")
+
+
+class PendingTransactionPublic(SQLModel):
+    id: UUID
+    statement_description: str
+    transaction_date: date
+    amount: float
+
+
+class FinalizeTransaction(SQLModel):
+    pending_transaction_id: UUID
+    account_id: UUID
+    category_id: UUID
+

@@ -14,6 +14,12 @@ from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.engine.url import make_url
 from sqlmodel import Session, SQLModel, create_engine, select
+import csv
+import io
+from fastapi import UploadFile, File
+from pydantic import BaseModel
+from models import PendingTransaction, PendingTransactionPublic, FinalizeTransaction
+
 
 from models import (
     User, UserCreate, UserPublic, Token, Account, Category, CategoryCreate,
@@ -555,3 +561,96 @@ def get_full_dashboard(year: int, month: int, user: User = Depends(get_current_u
         savings_summary = SavingsSummary(total_balance=total_balance, fund_balances=fund_balances)
 
     return V2DashboardResponse(checking_summary=checking_summary, savings_summary=savings_summary)
+
+
+@app.post("/transactions/upload", status_code=201)
+def upload_transactions(account_type: AccountType, file: UploadFile = File(...), user: User = Depends(get_current_user),
+                        session: Session = Depends(get_session)):
+    try:
+        contents = file.file.read().decode("utf-8")
+        csv_reader = csv.reader(io.StringIO(contents))
+        header = next(csv_reader)
+
+        if "Description" not in header or "Date" not in header or "Amount" not in header:
+            raise HTTPException(status_code=400, detail="CSV must contain 'Description', 'Date', and 'Amount' columns.")
+
+        pending_txs = []
+        for row in csv_reader:
+            row_dict = dict(zip(header, row))
+            description = row_dict["Description"].lower()
+            amount = abs(float(row_dict["Amount"]))
+
+            # Intelligent amount handling: default to expense (negative), but flip to income (positive) for refunds/payments.
+            if "payment" in description or "refund" in description:
+                final_amount = amount
+            else:
+                final_amount = -amount
+
+            pending_txs.append(
+                PendingTransaction(
+                    user_id=user.id,
+                    statement_description=row_dict["Description"],
+                    transaction_date=datetime.strptime(row_dict["Date"], "%Y-%m-%d").date(),
+                    amount=final_amount,
+                    target_account_type=account_type
+                )
+            )
+        session.add_all(pending_txs)
+        session.commit()
+        return {"message": f"Successfully imported {len(pending_txs)} transactions for review."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process file: {e}")
+
+
+# ** UPDATED ENDPOINT 2: GET PENDING **
+@app.get("/transactions/pending", response_model=List[PendingTransactionPublic])
+def get_pending_transactions(
+        account_type: AccountType,  # Now requires an account type to filter by
+        user: User = Depends(get_current_user),
+        session: Session = Depends(get_session)
+):
+    # This now only returns transactions for the specified account type
+    return session.exec(
+        select(PendingTransaction).where(
+            PendingTransaction.user_id == user.id,
+            PendingTransaction.target_account_type == account_type
+        )
+    ).all()
+
+
+# ** NEW ENDPOINT 3: IGNORE **
+@app.post("/transactions/pending/ignore", status_code=200)
+def ignore_pending_transactions(pending_ids: List[UUID], user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    txs_to_delete = session.exec(
+        select(PendingTransaction).where(PendingTransaction.user_id == user.id, PendingTransaction.id.in_(pending_ids))).all()
+    if not txs_to_delete:
+        raise HTTPException(status_code=404, detail="No matching transactions found to ignore.")
+    for tx in txs_to_delete:
+        session.delete(tx)
+    session.commit()
+    return {"message": "Selected transactions have been ignored."}
+
+
+# ** NEW ENDPOINT 4: FINALIZE **
+@app.post("/transactions/finalize", status_code=201)
+def finalize_transactions(finalized_txs: List[FinalizeTransaction], user: User = Depends(get_current_user),
+                          session: Session = Depends(get_session)):
+    newly_created_count = 0
+    for f_tx in finalized_txs:
+        pending_tx = session.get(PendingTransaction, f_tx.pending_transaction_id)
+        if pending_tx and pending_tx.user_id == user.id:
+            # Create the final transaction record
+            final_tx = Transaction(
+                user_id=user.id,
+                account_id=f_tx.account_id,
+                category_id=f_tx.category_id,
+                amount=pending_tx.amount,
+                description=pending_tx.statement_description,
+                transaction_date=pending_tx.transaction_date
+            )
+            session.add(final_tx)
+            # Remove the pending transaction
+            session.delete(pending_tx)
+            newly_created_count += 1
+    session.commit()
+    return {"message": f"Successfully finalized {newly_created_count} transactions."}

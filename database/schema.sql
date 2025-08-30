@@ -66,3 +66,16 @@ CREATE TABLE `transactions` (
     FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create the new, smarter table for pending transactions
+CREATE TABLE `pending_transactions` (
+    `id` BINARY(16) NOT NULL PRIMARY KEY,
+    `user_id` BINARY(16) NOT NULL,
+    `statement_description` VARCHAR(255) NOT NULL,
+    `transaction_date` DATE NOT NULL,
+    `amount` DECIMAL(10, 2) NOT NULL,
+    -- NEW: This column links the pending transaction to the account type of the active tab
+    `target_account_type` ENUM('Checking', 'Savings') NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
