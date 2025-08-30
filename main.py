@@ -160,35 +160,34 @@ def get_categories(user: User = Depends(get_current_user), session: Session = De
 
 @app.post("/transactions", response_model=TransactionPublic, status_code=201)
 def create_transaction(tx_create: TransactionCreate, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    # This is the new, intelligent transaction creation logic
-    # 1. Validate that both account and category belong to the user
     acc = session.get(Account, tx_create.account_id)
     cat = session.get(Category, tx_create.category_id)
     if not acc or acc.user_id != user.id: raise HTTPException(400, "Account not found")
     if not cat or cat.user_id != user.id: raise HTTPException(400, "Category not found")
 
-    # 2. If this is a "Savings" category transaction from Checking, create two entries
+    amount = abs(tx_create.amount)
+
+    # Handle the special case for funding savings from a checking account
     if cat.type == CategoryType.SAVINGS and acc.type == AccountType.CHECKING:
         savings_acc = session.exec(select(Account).where(Account.user_id == user.id, Account.type == AccountType.SAVINGS)).first()
         if not savings_acc: raise HTTPException(500, "User has no savings account configured")
 
-        # Debit from Checking (the expense)
-        checking_tx = Transaction.model_validate(tx_create, update={"user_id": user.id, "amount": -abs(tx_create.amount)})
-        # Credit to Savings (the deposit)
-        savings_tx = Transaction(user_id=user.id, account_id=savings_acc.id, category_id=cat.id, amount=abs(tx_create.amount),
-                                 transaction_date=tx_create.transaction_date, description=f"Fund from {acc.name}")
+        # Create a negative transaction for checking (outflow)
+        checking_tx = Transaction.model_validate(tx_create, update={"user_id": user.id, "amount": -amount})
+        # Create a positive transaction for savings (inflow)
+        savings_tx = Transaction(user_id=user.id, account_id=savings_acc.id, category_id=cat.id, amount=amount, transaction_date=tx_create.transaction_date, description=f"Fund from {acc.name}")
         session.add_all([checking_tx, savings_tx])
         session.commit()
         session.refresh(checking_tx)
-        return checking_tx  # Return the primary transaction
+        return checking_tx
     else:
-        # 3. For all other normal transactions
-        db_tx = Transaction.model_validate(tx_create, update={"user_id": user.id})
+        # For all other normal transactions, ensure expenses are negative and income is positive
+        final_amount = amount if cat.type == CategoryType.INCOME else -amount
+        db_tx = Transaction.model_validate(tx_create, update={"user_id": user.id, "amount": final_amount})
         session.add(db_tx)
         session.commit()
         session.refresh(db_tx)
         return db_tx
-
 
 @app.put("/transactions/{tx_id}", response_model=TransactionPublic)
 def update_transaction(tx_id: UUID, tx_up: TransactionUpdate, user: User = Depends(get_current_user),
