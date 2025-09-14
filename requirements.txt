@@ -1,7 +1,0 @@
-aiomysql==0.2.0
-fastapi==0.111.1
-greenlet==3.2.1
-mysql-connector-python==9.3.0
-pydantic-settings==2.4.0
-SQLAlchemy-Utils==0.41.2
-sqlmodel==0.0.21

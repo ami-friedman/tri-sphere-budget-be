@@ -1,0 +1,19 @@
+[project]
+name = "trisphere-budget-backend"
+version = "1.0.0"
+description = "The FastAPI backend for the Tri-Sphere Budget application."
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlmodel",
+    "mysql-connector-python",
+    "python-dotenv",
+    "passlib[bcrypt]",
+    "python-jose[cryptography]",
+    "gunicorn",
+    "python-multipart"  # <-- THIS LINE IS THE FIX
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
