@@ -8,7 +8,8 @@ dependencies = [
     "sqlmodel",
     "mysql-connector-python",
     "python-dotenv",
-    "passlib[bcrypt]",
+    "passlib",
+    "bcrypt==3.2.0",
     "python-jose[cryptography]",
     "gunicorn",
     "python-multipart"  # <-- THIS LINE IS THE FIX
